@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Absensi Mahasiswa UNPAM</title>
+    <style>
+        :root{ --primary:#003366; --secondary:#f1c40f; --bg:#f4f6f9; }
+        *{ box-sizing:border-box; font-family:'Segoe UI',sans-serif; }
+        body{ margin:0; background:var(--bg); }
+        .hidden{ display:none; }
+        .header{ background:var(--primary); color:white; padding:14px; display:flex; align-items:center; gap:12px; }
+        .header img{ height:45px; background:white; padding:5px; border-radius:8px; }
+        .header h1{ font-size:18px; margin:0; }
+        .header span{ font-size:12px; opacity:.9; }
+        .container{ max-width:1100px; margin:auto; padding:18px; }
+        .card{ background:white; padding:18px; margin-bottom:20px; border-radius:12px; box-shadow:0 6px 18px rgba(0,0,0,.08); }
+        .card h2{ border-left:6px solid var(--secondary); padding-left:10px; font-size:17px; }
+        label{ display:block; margin-top:10px; font-weight:600; }
+        input,select,textarea{ width:100%; padding:10px; margin-top:5px; border-radius:8px; border:1px solid #ccc; }
+        button{ margin-top:15px; padding:10px; border:none; border-radius:8px; cursor:pointer; font-weight:600; width:100%; }
+        .primary{background:var(--primary);color:white}
+        .secondary{background:#2980b9;color:white}
+        .danger{background:#c0392b;color:white}
+        .logout{background:#7f8c8d;color:white; width: auto;}
+        table{ width:100%; border-collapse:collapse; margin-top:10px; font-size:14px; }
+        th,td{ padding:10px; border-bottom:1px solid #ddd; text-align:center; }
+        th{background:#ecf0f1}
+        .badge{ padding:4px 10px; border-radius:20px; color:white; font-size:11px; font-weight:bold; }
+        .hadir{background:#27ae60}
+        .tidak{background:#c0392b}
+        .ganti{background:#2980b9}
+        .footer{ text-align:center; color:#7f8c8d; font-size:12px; margin:20px 0; }
+    </style>
+</head>
+<body>
+
+<div class="container" id="loginPage">
+    <div class="card" style="max-width:400px;margin:auto">
+        <h2 style="text-align:center">Login Sistem Akademik UNPAM</h2>
+        <label>Username</label>
+        <input id="username_inp">
+        <label>Password</label>
+        <input type="password" id="password_inp">
+        <button class="primary" onclick="handleLogin()">Login</button>
+    </div>
+</div>
+
+<div id="dashboard" class="hidden">
+    <div class="header">
+        <img src="logo unpam.png" alt="Logo">
+        <div>
+            <h1>UNIVERSITAS PAMULANG</h1>
+            <span>Sistem Absensi Mahasiswa</span><br>
+            <span id="roleInfo"></span>
+        </div>
+    </div>
+
+    <div class="container">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+            <button class="logout" onclick="location.reload()">Logout</button>
+            <button id="btnReset" class="danger hidden" onclick="resetSemua()">🗑️ Hapus Semua Data</button>
+        </div>
+
+        <div class="card" id="absenSection">
+            <h2>Form Absensi Mahasiswa</h2>
+            <form id="formAbsen">
+                <label>Nama Mahasiswa</label>
+                <input id="nama_f" required>
+                <label>NIM</label>
+                <input id="nim_f" required>
+                <label>Status Kehadiran</label>
+                <select id="status_f" onchange="toggleAlasan()">
+                    <option value="Hadir">Hadir</option>
+                    <option value="Tidak Hadir">Tidak Hadir</option>
+                </select>
+                <div id="alasanBox" class="hidden">
+                    <label>Alasan (Izin/Sakit)</label>
+                    <textarea id="alasan_f"></textarea>
+                </div>
+                <button type="submit" class="primary">Simpan Absensi</button>
+            </form>
+        </div>
+
+        <div class="card" id="gantiSection">
+            <h2>Pengajuan Ganti Absen</h2>
+            <form id="formGanti">
+                <label>Nama Mahasiswa</label>
+                <input id="nama_g" required>
+                <label>NIM</label>
+                <input id="nim_g" required>
+                <label>Tanggal Absen Diganti</label>
+                <input type="date" id="tglGanti" required>
+                <label>Alasan Penggantian</label>
+                <textarea id="alasanGanti" required></textarea>
+                <button type="submit" class="secondary">Ajukan Penggantian</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h2>Data Absensi & Pengajuan</h2>
+            <div style="overflow-x:auto">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>No</th><th>Nama</th><th>NIM</th><th>Status</th><th>Tanggal</th><th>Keterangan</th><th class="dosenCol hidden">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabelBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="footer">© 2025 Universitas Pamulang</div>
+</div>
+
+<script>
+    const users = [
+        { u: "mahasiswa", p: "12345", r: "Mahasiswa" },
+        { u: "dosen", p: "admin", r: "Dosen" }
+    ];
+
+    let dbAbsen = JSON.parse(localStorage.getItem("db_unpam")) || [];
+    let currentRole = "";
+
+    function toggleAlasan() {
+        const s = document.getElementById("status_f").value;
+        document.getElementById("alasanBox").classList.toggle("hidden", s !== "Tidak Hadir");
+    }
+
+    function handleLogin() {
+        const u = document.getElementById("username_inp").value;
+        const p = document.getElementById("password_inp").value;
+        const user = users.find(x => x.u === u && x.p === p);
+
+        if (user) {
+            currentRole = user.r;
+            document.getElementById("loginPage").classList.add("hidden");
+            document.getElementById("dashboard").classList.remove("hidden");
+            document.getElementById("roleInfo").innerText = "Login sebagai: " + user.r;
+
+            if (user.r === "Dosen") {
+                document.getElementById("absenSection").classList.add("hidden");
+                document.getElementById("gantiSection").classList.add("hidden");
+                document.getElementById("btnReset").classList.remove("hidden");
+                document.querySelectorAll(".dosenCol").forEach(el => el.classList.remove("hidden"));
+            }
+            renderData();
+        } else {
+            alert("Username/Password Salah!");
+        }
+    }
+
+    // SIMPAN ABSEN BIASA
+    document.getElementById("formAbsen").onsubmit = function(e) {
+        e.preventDefault();
+        const data = {
+            nama: document.getElementById("nama_f").value,
+            nim: document.getElementById("nim_f").value,
+            status: document.getElementById("status_f").value,
+            tanggal: new Date().toLocaleDateString("id-ID"),
+            keterangan: document.getElementById("status_f").value === "Tidak Hadir" ? document.getElementById("alasan_f").value : "Hadir Tepat Waktu"
+        };
+        dbAbsen.push(data);
+        saveAndRefresh();
+        this.reset();
+        toggleAlasan();
+    };
+
+    // SIMPAN GANTI ABSEN (Sekarang pakai Nama & NIM inputan)
+    document.getElementById("formGanti").onsubmit = function(e) {
+        e.preventDefault();
+        const data = {
+            nama: document.getElementById("nama_g").value,
+            nim: document.getElementById("nim_g").value,
+            status: "Ganti Absen",
+            tanggal: document.getElementById("tglGanti").value,
+            keterangan: "Alasan: " + document.getElementById("alasanGanti").value
+        };
+        dbAbsen.push(data);
+        saveAndRefresh();
+        this.reset();
+        alert("Pengajuan Ganti Absen Berhasil Dikirim!");
+    };
+
+    function saveAndRefresh() {
+        localStorage.setItem("db_unpam", JSON.stringify(dbAbsen));
+        renderData();
+    }
+
+    function renderData() {
+        const tbody = document.getElementById("tabelBody");
+        tbody.innerHTML = "";
+
+        dbAbsen.forEach((item, index) => {
+            let badgeClass = "hadir";
+            if(item.status === "Tidak Hadir") badgeClass = "tidak";
+            if(item.status === "Ganti Absen") badgeClass = "ganti";
+
+            const row = `
+                <tr>
+                    <td>${index + 1}</td>
+                    <td>${item.nama}</td>
+                    <td>${item.nim}</td>
+                    <td><span class="badge ${badgeClass}">${item.status}</span></td>
+                    <td>${item.tanggal}</td>
+                    <td>${item.keterangan}</td>
+                    <td class="${currentRole === 'Dosen' ? '' : 'hidden'}">
+                        <button class="danger" style="width:auto; padding:5px 10px; margin:0" onclick="hapusSatu(${index})">Hapus</button>
+                    </td>
+                </tr>
+            `;
+            tbody.innerHTML += row;
+        });
+    }
+
+    function hapusSatu(idx) {
+        if(confirm("Hapus data ini?")) {
+            dbAbsen.splice(idx, 1);
+            saveAndRefresh();
+        }
+    }
+
+    function resetSemua() {
+        if(confirm("Hapus SEMUA data di tabel?")) {
+            dbAbsen = [];
+            saveAndRefresh();
+        }
+    }
+</script>
+</body>
+</html>
